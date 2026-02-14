@@ -7,10 +7,12 @@ alias pyfind='find . -name "*.py"'
 # Remove python compiled byte-code and mypy/pytest cache in either the current
 # directory or in a list of specified directories (including sub directories).
 function pyclean() {
-  find "${@:-.}" -type f -name "*.py[co]" -delete
-  find "${@:-.}" -type d -name "__pycache__" -delete
-  find "${@:-.}" -depth -type d -name ".mypy_cache" -exec rm -r "{}" +
-  find "${@:-.}" -depth -type d -name ".pytest_cache" -exec rm -r "{}" +
+  local targets=("${@:-.}")
+
+  find "${targets[@]}" -type f -name "*.py[co]" -delete
+  find "${targets[@]}" -type d \
+    \( -name "__pycache__" -o -name ".mypy_cache" -o -name ".pytest_cache" \) \
+    -prune -exec rm -rf "{}" +
 }
 
 # Add the user installed site-packages paths to PYTHONPATH, only if the
@@ -27,9 +29,9 @@ function pyuserpaths() {
     # Check if command exists
     (( ${+commands[$python]} )) || continue
 
-    # Get minor release version.
-    # The patch version is variable length, truncate it.
-    version=${(M)${"$($python -V 2>&1)":7}#[^.]##.[^.]##}
+    # Get major.minor version using Python itself.
+    version="$($python -c 'import sys; print("{}.{}".format(sys.version_info[0], sys.version_info[1]))' 2>/dev/null)"
+    [[ -n "$version" ]] || continue
 
     # Add version specific path, if:
     # - it exists in the filesystem
@@ -68,6 +70,7 @@ function vrun() {
       fi
     done
     echo >&2 "Error: no virtual environment found in current directory"
+    return 1
   fi
 
   local name="${1:-$PYTHON_VENV_NAME}"
